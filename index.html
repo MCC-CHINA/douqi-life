@@ -172,7 +172,11 @@ const TALENTS=[
  {id:"hualao",n:"话痨",r:0,d:"人缘极好但静不下心。社交事件概率+，修炼速度-5%。",m:{cult:0.95},f:"talk"},
 ];
 function drawTalents(){
- const pool=[...TALENTS],out=[];
+ const unlocked=getUnlocked();
+ const pool=[...TALENTS.filter(t=>t.r<3||unlocked.includes(t.id))],out=[];
+ // 已解锁的传说必出一张
+ const myLegends=pool.filter(t=>t.r===3);
+ if(myLegends.length){const g=pick(myLegends);out.push(g);pool.splice(pool.indexOf(g),1);}
  const weights={0:50,1:30,2:15,3:5};
  while(out.length<10&&pool.length){
    let tw=pool.reduce((s,t)=>s+weights[t.r],0),x=Math.random()*tw,sel=pool[0];
@@ -182,7 +186,41 @@ function drawTalents(){
  return out;
 }
 /* ============ 随机事件 ============ */
-const FLAMES=["紫极天火","寒月冰焰","大日金乌炎","九幽冥火","虚空雷炎","青木灵火","血河魔焰","星辰古焱"];
+const FLAMES=[
+ {n:"紫极天火",m:{cult:1.2},d:"修炼速度+20%"},
+ {n:"寒月冰焰",m:{fight:0.15},d:"战斗胜率+15%"},
+ {n:"大日金乌炎",m:{cult:1.3},d:"修炼速度+30%"},
+ {n:"九幽冥火",m:{fight:0.25},d:"战斗胜率+25%"},
+ {n:"虚空雷炎",m:{brk:0.08},d:"突破概率+8%"},
+ {n:"青木灵火",m:{med:1.5},d:"丹药效果+50%"},
+ {n:"血河魔焰",m:{fight:0.3},d:"战斗胜率+30%"},
+ {n:"星辰古焱",m:{qy:2},d:"气运+2"},
+ {n:"南明离火",m:{cult:1.15,fight:0.1},d:"修炼+15%，战斗+10%"},
+ {n:"太阴真火",m:{cult:1.25},d:"修炼速度+25%"},
+ {n:"九天玄火",m:{fight:0.2,brk:0.05},d:"战斗+20%，突破+5%"},
+ {n:"红莲业火",m:{fight:0.35},d:"战斗胜率+35%"},
+ {n:"幽冥鬼火",m:{cult:1.2,brk:0.05},d:"修炼+20%，突破+5%"},
+ {n:"烈阳真焱",m:{cult:1.35},d:"修炼速度+35%"}
+];
+function flameOf(n){return FLAMES.find(f=>f.n===n);}
+function flameBonus(s,key){
+ let b=(key==="cult"||key==="med")?1:0;
+ s.flames.forEach(n=>{const f=flameOf(n);if(f&&f.m[key]){b=(key==="cult"||key==="med")?b*f.m[key]:b+f.m[key];}});
+ return b;
+}
+function flameBonusRefined(s,key){
+ let b=flameBonus(s,key);
+ if(s.flags.refine){b=(key==="cult"||key==="med")?b*1.25:b+0.1;}
+ return b;
+}
+function obtainFlame(s){
+ const avail=FLAMES.filter(f=>!s.flames.includes(f.n));
+ if(!avail.length)return null;
+ const f=pick(avail);s.flames.push(f.n);
+ if(f.m.qy)s.stats.qy+=f.m.qy;
+ addLog("收服异火："+f.n+"（"+f.d+"）");unlock(s,"fire");checkAch(s);
+ return f;
+}
 function hasT(s,id){return s.talents.includes(id);}
 function lucky(s){return Math.random()<(0.12+s.stats.qy*0.015)*(hasT(s,"tianming")?2:1);}
 
@@ -226,16 +264,16 @@ const EVENTS=[
 {t:"红颜祸水",cond:s=>!!s.spouse&&Math.random()<0.3,d:"你的红颜被城中恶少看上，对方扬言三日后来抢亲。",
  c:[{t:"决一死战",f:s=>{if(fightWin(s,0.55)){s.flags.hero=true;return "你于城门前一战，恶少落荒而逃，传为佳话。";}return die(s,"为保护红颜，力战而亡。红颜为你守寡终生。")," ";}},
      {t:"带她远走高飞",f:s=>{s.money=Math.floor(s.money*0.6);return "你们连夜离开此城，隐姓埋名。";}}]},
-{t:"异火出世",cond:s=>s.r>=4&&s.flames.length<3,d:"天现异象，"+pick(FLAMES)+"降世！方圆千里强者齐聚，异火榜又要变天了。",
- c:[{t:"争夺异火",f:s=>{let ch=0.25+(hasT(s,"yihuo")?0.4:0)+s.stats.qy*0.02;
-   if(Math.random()<ch){const f=pick(FLAMES.filter(x=>!s.flames.includes(x)));s.flames.push(f);return "历经九死一生，你收服了<span class='flame'>"+f+"</span>！战力大增，炼药如虎添翼。";}
+{t:"异火出世",cond:s=>s.r>=4&&s.flames.length<3,d:s=>"天现异象，"+pick(FLAMES).n+"降世！方圆千里强者齐聚，异火榜又要变天了。",
+ c:[{t:"争夺异火",f:s=>{let ch=0.25+(hasT(s,"yihuo")?0.4:0)+s.stats.qy*0.02+(s.flags.flamemap?0.15:0);
+   if(Math.random()<ch){const f2=obtainFlame(s);return f2?"历经九死一生，你收服了异火"+f2.n+"（"+f2.d+"）！":"异火已被人捷足先登。";}
    injure(s,0.5);return "异火狂暴，你被烧成重伤，侥幸捡回一命。";}},
      {t:"远远观望",f:s=>{s.exp+=100;return "观摩强者争夺异火，若有所悟，修为+100。";}}]},
 {t:"炼药师考核",cond:s=>(hasT(s,"dandi")||hasT(s,"xuantu"))&&!s.flags.yaoshi,d:"炼药师公会公开考核，一品炼药师身份尊贵无比。",
  c:[{t:"参加",f:s=>{if(hasT(s,"dandi")||Math.random()<0.5){s.flags.yaoshi=true;s.money+=2000;return "你炼制出一品丹药，全场震惊！成为炼药师，财源滚滚。";}return "炸炉了……还好人没事。";}},
      {t:"不参加",f:s=>{return "时机未到，再沉淀沉淀。";}}]},
 {t:"炼丹",cond:s=>!!s.flags.yaoshi,d:"你开炉炼丹，药香四溢。",
- c:[{t:"炼制修炼丹",f:s=>{const g=R(150,300)*(hasT(s,"dandi")?2:1);s.exp+=g;return "丹成！服下后修为+"+Math.round(g)+"。";}},
+ c:[{t:"炼制修炼丹",f:s=>{const g=Math.round(R(150,300)*(hasT(s,"dandi")?2:1)*flameBonusRefined(s,"med"));s.exp+=g;return "丹成！服下后修为+"+Math.round(g)+"。";}},
      {t:"炼制售卖",f:s=>{const m=R(400,900);s.money+=m;return "丹药售出，进账"+m+"金。";}}]},
 {t:"走火入魔",cond:s=>s.r>=2&&Math.random()<0.12,d:"修炼时急于求成，体内斗气乱窜，经脉如刀割般疼痛！",
  c:[{t:"强行压制",f:s=>{if(Math.random()<0.5+s.stats.wx*0.03){s.exp+=200;return "你守住心神，反而因祸得福，修为+200。";}injure(s,0.4);return "压制失败，经脉受损，修为倒退。";}},
@@ -354,8 +392,8 @@ const EVENTS=[
    s.money+=5000;return "遗迹宝库搬空，金钱+5000！";}},
      {t:"放弃",f:s=>{return "大海凶险，来日再说。";}}]},
 {t:"火山取火",cond:s=>s.r>=3&&s.flames.length<3,d:"传闻南疆火山口有异火气息，岩浆翻涌，凶险异常。",
- c:[{t:"深入火山",f:s=>{let ch=0.2+(hasT(s,"yihuo")?0.35:0)+s.stats.qy*0.015;
-   if(Math.random()<ch){const f=pick(FLAMES.filter(x=>!s.flames.includes(x)));s.flames.push(f);unlock(s,"fire");return "你在岩浆深处收服了异火"+f+"！";}
+ c:[{t:"深入火山",f:s=>{let ch=0.2+(hasT(s,"yihuo")?0.35:0)+s.stats.qy*0.015+(s.flags.flamemap?0.15:0);
+   if(Math.random()<ch){const f2=obtainFlame(s);return f2?"你在岩浆深处收服了异火"+f2.n+"（"+f2.d+"）！":"异火已熄。";}
    injure(s,0.45);return "火毒入体，你拼死逃出。";}},
      {t:"在山口观望",f:s=>{s.exp+=120;return "观摩火山口异象，若有所悟，修为+120。";}}]},
 {t:"结拜",cond:s=>s.age>=14&&!s.flags.bro&&Math.random()<0.25,d:"酒馆中，你与一位落魄剑客一见如故，相约桃园结拜。",
@@ -422,6 +460,20 @@ const EVENTS=[
 {t:"深入采药",cond:s=>s.age>=10&&Math.random()<0.15,d:"深山老林中有高阶灵草，但毒虫猛兽出没。",
  c:[{t:"深入",f:s=>{if(fightWin(s,0.55)){const m=R(500,1200);s.money+=m;return "采得高阶灵草，卖了"+m+"金。";}injure(s,0.35);return "被毒虫咬伤，铩羽而归。";}},
      {t:"外围采采",f:s=>{const m=R(100,300);s.money+=m;return "采了些普通药材，卖"+m+"金。";}}]},
+{t:"异火榜",cond:s=>s.age>=14,d:s=>{const mine=s.flames.length?("你已收服："+s.flames.join("、")):"你尚未收服任何异火";return "天机阁公布新一期《异火榜》，十四种异火各有神通。<br><br>"+mine+"<br><br>榜上异火："+FLAMES.map(f=>f.n+"（"+f.d+"）").join("、");},
+ c:[{t:"瞻仰异火榜",f:s=>{s.exp+=80;return "观摩异火榜，若有所悟，修为+80。";}}]},
+{t:"炼化异火",cond:s=>s.flames.length>0&&!s.flags.refine,d:s=>"你收服的异火"+s.flames.join("、")+"尚未完全炼化，狂暴难驯。若能彻底炼化，威力倍增。",
+ c:[{t:"闭关炼化",f:s=>{if(Math.random()<0.6+s.stats.wx*0.02){s.flags.refine=true;return "七七四十九天，你将异火彻底炼化！异火效果提升。";}injure(s,0.35);return "炼化失败，遭到反噬。";}},
+     {t:"暂不炼化",f:s=>{return "时机未到。";}}]},
+{t:"异火反噬",cond:s=>s.flames.length>0&&Math.random()<0.12,d:"体内异火突然暴动！狂暴的火焰在经脉中横冲直撞！",
+ c:[{t:"强行镇压",f:s=>{if(Math.random()<0.55+s.stats.gg*0.02){s.exp+=200;return "你镇压了异火，反而掌控更进一步，修为+200。";}injure(s,0.45);return "镇压失败，五内俱焚。";}},
+     {t:"散去一缕本源",f:s=>{s.exp=Math.floor(s.exp*0.85);return "你散去一缕异火本源，平息暴动，修为小退。";}}]},
+{t:"异火拍卖",cond:s=>s.money>=1500&&s.age>=16,d:"万宝楼拍卖一卷《异火图志》，记载三种异火的出没之地，起拍1500金。",
+ c:[{t:"拍下(1500金)",f:s=>{s.money-=1500;s.flags.flamemap=true;return "你拍下图志！此后收服异火概率提升。";}},
+     {t:"放弃",f:s=>{return "太贵了。";}}]},
+{t:"以火炼丹",cond:s=>!!s.flags.yaoshi&&s.flames.length>0,d:"你突发奇想：以异火炼丹，会炼出什么？",
+ c:[{t:"尝试",f:s=>{if(Math.random()<0.6){const g=Math.round(R(300,600)*flameBonusRefined(s,"med"));s.exp+=g;s.money+=1500;return "异火炼丹，丹成九纹！服下一颗修为+"+g+"，余下卖了1500金。";}injure(s,0.3);return "炸炉了，异火差点失控。";}},
+     {t:"算了",f:s=>{return "稳一手。";}}]},
 ];
 /* ============ 功法 ============ */
 const GONGFA=[
@@ -462,6 +514,17 @@ function saveRecords(){
  try{localStorage.setItem("dq_records",JSON.stringify(r))}catch(e){}
 }
 function getCarry(){try{return localStorage.getItem("dq_carry")||""}catch(e){return""}}
+/* ============ 灵气（传说天赋解锁） ============ */
+const LQ_COST={doudi:150,hongmeng:150,tianming:120,lunhui:120,jianxin:100,jiuzhuan:100,dandi:100,yihuo:80};
+function getLingqi(){try{return parseInt(localStorage.getItem("dq_lingqi")||"0")}catch(e){return 0}}
+function addLingqi(n){try{localStorage.setItem("dq_lingqi",String(getLingqi()+n))}catch(e){}}
+function spendLingqi(n){if(getLingqi()<n)return false;addLingqi(-n);return true;}
+function getUnlocked(){try{return JSON.parse(localStorage.getItem("dq_unlocked")||"[]")}catch(e){return[]}}
+function unlockTalent(id){const u=getUnlocked();if(!u.includes(id)){u.push(id);try{localStorage.setItem("dq_unlocked",JSON.stringify(u))}catch(e){}}}
+function earnLingqi(s){
+ const lq=s.maxR*15+Object.keys(s.ach).length*8+Math.floor(s.age/20)+s.flames.length*10;
+ addLingqi(lq);return lq;
+}
 function setCarry(id){try{localStorage.setItem("dq_carry",id)}catch(e){}}
 function clearCarry(){try{localStorage.removeItem("dq_carry")}catch(e){}}
 
@@ -517,6 +580,7 @@ function cultRate(s){
  if(hasT(s,"lunhui"))c*=s.age<30?0.7:2;
  if(s.flags.master)c*=1.3;
  if(s.gongfa)c*=s.gongfa.m;
+ c*=flameBonusRefined(s,"cult");
  if(s.flags.doudi_chuancheng)c*=1.5;
  if(s.sect)c*=1.2;
  return c;
@@ -554,7 +618,7 @@ function tryBreakthrough(){
    if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9))break; // 等天劫事件
    const big=S.sg>=REALMS[S.r].s;
    const ch=big?0.45+S.stats.wx*0.02+S.stats.qy*0.01:0.75+S.stats.wx*0.02+(hasT(S,"wuchi")?0.05:0);
-   if(Math.random()<Math.min(ch,0.98)){
+   if(Math.random()<Math.min(ch+flameBonusRefined(S,"brk"),0.98)){
      S.exp-=S.need;advanceRealm();grew=true;
    }else{
      S.exp=Math.floor(S.need*0.5);
@@ -582,6 +646,7 @@ function fightWin(s,base){
  if(hasT(s,"swordmaster"))ch+=0.4;if(hasT(s,"hunter"))ch+=0.1;if(hasT(s,"smith"))ch+=0.08;
  if(hasT(s,"drunk"))ch+=0.2;if(hasT(s,"beast")&&s.flags.pet)ch+=0.15;
  if(s.flags.bro)ch+=0.1;if(s.flags.meteor)ch+=0.1;
+ ch+=flameBonusRefined(s,"fight");
  ch+=s.stats.qy*0.01;
  const win=Math.random()<clamp(ch,0.05,0.95);
  if(win)s.kills++;
@@ -649,6 +714,7 @@ function showEnding(){
  document.getElementById('e-edesc').innerHTML=(S.cause||"离世")+"<br>享年 "+S.age+" 岁";
  const tl=S.timeline.slice(-8).reverse().map(t=>`<div class="stat-row"><span>${t}</span></div>`).join("");
  saveRecords();
+ const lqGet=earnLingqi(S);
  const achList=ACHS.filter(a=>S.ach[a.id]);
  const achHtml=achList.length?achList.map(a=>`<span style="display:inline-block;background:#2c2317;border:1px solid #a67c2e;border-radius:8px;padding:4px 10px;margin:3px;font-size:12px;color:#ffd97a">🏆${a.n}</span>`).join(""):"<div class='tip'>本世未获得成就</div>";
  document.getElementById('e-eval').innerHTML=
@@ -657,6 +723,7 @@ function showEnding(){
    <div class="stat-row"><span>功法</span><b>${S.gongfa?"《"+S.gongfa.n+"》":"无"}</b></div>
    <div class="stat-row"><span>斩杀</span><b>${S.kills} 人</b></div>
    <div class="stat-row"><span>金钱</span><b>${S.money}</b></div>
+   <div class="stat-row"><span>本世获得灵气</span><b style="color:#a9c8ff">+${lqGet}（余额 ${getLingqi()}）</b></div>
    <div style="margin:10px 0 6px;font-size:13px;color:#8a7a5c">本世成就（${achList.length}/${ACHS.length}）</div>
    <div style="margin-bottom:6px">${achHtml}</div>
    <div style="margin:10px 0 6px;font-size:13px;color:#8a7a5c">转世：选一个天赋带入下一世</div>
@@ -670,6 +737,32 @@ function showEnding(){
  });
  show('s-end');
 }
+function renderLingqiPanel(){
+ try{
+  const lq=getLingqi(),unlocked=getUnlocked();
+  const legends=TALENTS.filter(t=>t.r===3);
+  const d=document.createElement('div');d.className='card';d.id='lq-panel';
+  let h="<div style='font-size:14px;margin-bottom:8px'>灵气：<b style='color:#a9c8ff'>"+lq+"</b> <span style='font-size:11px;color:#8a7a5c'>（每世结算按境界/成就/寿元发放）</span></div>";
+  h+="<div style='font-size:13px;color:#8a7a5c;margin-bottom:6px'>传说天赋解锁</div><div class='talent-grid'>";
+  legends.forEach(t=>{
+   const un=unlocked.includes(t.id),cost=LQ_COST[t.id]||100;
+   h+="<div class='talent"+(un?" sel":"")+"' id='lq-"+t.id+"'>"+
+     "<span class='r r3'>传说"+(un?"·已解锁":"")+"</span>"+
+     "<div class='nm'>"+t.n+"</div><div class='ds'>"+t.d+"</div>"+
+     (un?"":"<div style='margin-top:6px'><button class='btn' style='padding:8px;font-size:13px' data-tid='"+t.id+"' data-cost='"+cost+"' onclick='buyTalent(this.dataset.tid,+this.dataset.cost)'>"+cost+"灵气解锁</button></div>")+
+     "</div>";
+  });
+  h+="</div>";
+  d.innerHTML=h;
+  const s=document.getElementById('s-start');s.insertBefore(d,s.children[1]);
+ }catch(e){}
+}
+function buyTalent(id,cost){
+ if(!spendLingqi(cost)){alert("灵气不足！");return;}
+ unlockTalent(id);
+ const p=document.getElementById('lq-panel');if(p)p.remove();
+ renderLingqiPanel();
+}
 // 开局界面显示历史战绩
 (function(){
  try{
@@ -682,6 +775,7 @@ function showEnding(){
     "<div class='stat-row'><span>最多斩杀</span><b>"+(r.maxKills||0)+" 人</b></div>";
    const s=document.getElementById('s-start');s.insertBefore(d,s.children[1]);
   }
+  renderLingqiPanel();
   const carry=getCarry();
   if(carry){const t=TALENTS.find(x=>x.id===carry);
    if(t){const d=document.createElement('div');d.className='tip';d.textContent="转世携带天赋："+t.n+"（下一世开局自动获得）";
