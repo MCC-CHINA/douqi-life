@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>斗气重开模拟器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0d0a14;color:#e8dcc0;font-family:"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;padding:12px;max-width:640px;margin:0 auto}
+h1{font-size:26px;text-align:center;margin:18px 0 4px;color:#f5c542;letter-spacing:4px;text-shadow:0 0 18px rgba(245,197,66,.35)}
+.sub{text-align:center;color:#8a7a5c;font-size:13px;margin-bottom:22px}
+.screen{display:none}.screen.on{display:block;animation:fade .3s}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+.card{background:#171222;border:1px solid #3a2c17;border-radius:12px;padding:14px;margin-bottom:12px}
+.btn{display:block;width:100%;padding:13px;margin:8px 0;background:linear-gradient(180deg,#6b4a12,#4a3208);color:#ffe9b0;border:1px solid #a67c2e;border-radius:10px;font-size:16px;letter-spacing:2px;cursor:pointer}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:#221a30;border-color:#4a3a6b}
+.btn:disabled{opacity:.4}
+.talent-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.talent{border:1px solid #3a2c17;border-radius:10px;padding:10px;background:#171222;cursor:pointer;position:relative}
+.talent.sel{border-color:#f5c542;box-shadow:0 0 12px rgba(245,197,66,.35)}
+.talent .r{font-size:11px;padding:2px 8px;border-radius:8px;display:inline-block;margin-bottom:6px}
+.r0{background:#3a3a3a;color:#bbb}.r1{background:#1d4d2b;color:#9fe6b8}.r2{background:#1d3a6e;color:#a9c8ff}.r3{background:#6e1d1d;color:#ffc9a9}
+.talent .nm{font-weight:bold;font-size:15px;margin-bottom:4px}
+.talent .ds{font-size:12px;color:#a8977a;line-height:1.5}
+.stat-row{display:flex;justify-content:space-between;font-size:14px;padding:6px 2px;border-bottom:1px dashed #2c2317}
+.stat-row b{color:#f5c542}
+.realm{font-size:20px;color:#f5c542;text-align:center;margin:8px 0;font-weight:bold}
+.age{font-size:13px;color:#8a7a5c;text-align:center;margin-bottom:8px}
+.evt-title{font-size:17px;color:#ffd97a;margin-bottom:8px;font-weight:bold}
+.evt-desc{font-size:14.5px;line-height:1.75;color:#d8c9a8;margin-bottom:12px;white-space:pre-wrap}
+.log{font-size:12.5px;color:#7a6c52;max-height:150px;overflow-y:auto;line-height:1.7;border-top:1px solid #2c2317;margin-top:10px;padding-top:8px}
+.log div{margin-bottom:2px}
+.bar{height:8px;background:#241c10;border-radius:4px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#a67c2e,#f5c542)}
+.rank{font-size:42px;text-align:center;margin:10px 0}
+.center{text-align:center}.tip{font-size:12px;color:#8a7a5c;text-align:center;margin:8px 0}
+.flame{color:#ff9a3c;font-weight:bold}
+select,input{width:100%;padding:10px;margin:6px 0;background:#221a30;color:#e8dcc0;border:1px solid #4a3a6b;border-radius:8px;font-size:15px}
+</style>
+</head>
+<body>
+<h1>斗气重开模拟器</h1>
+<div class="sub">开局抽天赋 · 一切皆随机 · 一世斗气人生</div>
+
+<!-- 开局 -->
+<div class="screen on" id="s-start">
+  <div class="card">
+    <div class="evt-desc">斗气大陆，强者为尊。有人生来便是斗帝血脉，有人终其一生困于斗之气。
+    <br><br>抽取你的天赋，随机你的人生。是成为俯瞰众生的斗帝，还是泯然众人的一捧黄土——全看天意。</div>
+    <label style="font-size:14px;color:#a8977a">给自己起个名字</label>
+    <input id="ipt-name" maxlength="8" placeholder="随机" value="">
+    <button class="btn" onclick="newLife()">开始新的人生</button>
+  </div>
+  <div class="tip">单机小游戏 · 进度保存在本机</div>
+</div>
+
+<!-- 选天赋 -->
+<div class="screen" id="s-talent">
+  <div class="card">
+    <div class="center" style="font-size:16px;margin-bottom:4px">天道赐福 · 十选其三 <b id="t-pick" style="color:#f5c542">0/3</b></div>
+    <div class="tip">点击卡片选择，再点取消</div>
+    <div class="talent-grid" id="t-grid"></div>
+    <button class="btn" id="t-ok" onclick="confirmTalents()" disabled>投胎！</button>
+  </div>
+</div>
+
+<!-- 主游戏 -->
+<div class="screen" id="s-main">
+  <div class="card">
+    <div class="realm" id="m-realm">斗之气一段</div>
+    <div class="age" id="m-age">0 岁</div>
+    <div class="bar"><i id="m-expbar" style="width:0%"></i></div>
+    <div id="m-stats"></div>
+  </div>
+  <div class="card">
+    <div class="evt-title" id="e-title">出生</div>
+    <div class="evt-desc" id="e-desc"></div>
+    <div id="e-choices"></div>
+  </div>
+  <div class="card">
+    <div style="font-size:13px;color:#8a7a5c;margin-bottom:6px">人生轨迹</div>
+    <div class="log" id="m-log"></div>
+  </div>
+</div>
+
+<!-- 结算 -->
+<div class="screen" id="s-end">
+  <div class="card center">
+    <div class="rank" id="e-rank">⚰️</div>
+    <div class="evt-title" id="e-etitle" style="text-align:center"></div>
+    <div class="evt-desc" id="e-edesc" style="text-align:center"></div>
+    <div id="e-eval" style="text-align:left"></div>
+    <button class="btn" onclick="newLife()">再活一世</button>
+    <button class="btn ghost" onclick="show('s-start')">回到 title</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ 基础 ============ */
+const R=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const RNAME=["凡","良","稀有","传说"];
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on');window.scrollTo(0,0);}
+
+/* ============ 境界 ============ */
+const REALMS=[
+ {n:"斗之气",s:9},{n:"斗者",s:9},{n:"斗师",s:9},{n:"大斗师",s:9},
+ {n:"斗灵",s:9},{n:"斗王",s:9},{n:"斗皇",s:9},{n:"斗宗",s:9},
+ {n:"斗尊",s:9},{n:"斗圣",s:9},{n:"斗帝",s:1}
+];
+const BIGBONUS=[0,0,0,0,0,30,60,120,250,500,1000]; // 大境界寿元加成
+function realmName(r,sg){return REALMS[r].n+(REALMS[r].s>1?["","一","二","三","四","五","六","七","八","九"][sg]:"");}
+function realmPower(r,sg){ // 战力估算
+ let p=0;for(let i=0;i<r;i++)p+=Math.pow(3.2,i)*9;
+ return p+Math.pow(3.2,r)*sg;
+}
+
+/* ============ 天赋 ============ */
+// mod: qh斗气亲和 wx悟性 gg根骨 qy气运 jj家境, cult修炼倍率, flag特殊标记
+const TALENTS=[
+ {id:"doudi",n:"斗帝血脉",r:3,d:"先祖曾为斗帝，血脉中流淌着至强的力量。修炼速度+60%。",m:{cult:1.6}},
+ {id:"tianming",n:"天命之子",r:3,d:"天道眷顾之人。气运+5，奇遇概率翻倍。",m:{qy:5},f:"lucky"},
+ {id:"yihuo",n:"异火亲和",r:3,d:"天生亲近天地异火，收服异火成功率+40%。",m:{},f:"fire"},
+ {id:"dandi",n:"丹帝转世",r:3,d:"前世乃八品炼药宗师。炼药成功率大增，丹药效果+100%。",m:{},f:"alchem"},
+ {id:"lunhui",n:"轮回大能",r:3,d:"大能转世，记忆未觉醒。30岁前修炼-30%，30岁后觉醒，修炼+100%。",m:{},f:"reinc"},
+ {id:"shengzhi",n:"生而知之",r:2,d:"悟性+4，突破瓶颈如饮水。",m:{wx:4}},
+ {id:"daoti",n:"先天道体",r:2,d:"斗气亲和+4，修炼一日千里。",m:{qh:4}},
+ {id:"tongpi",n:"铜皮铁骨",r:2,d:"寿元+12，受伤与暴毙概率大幅降低。",m:{gg:2},f:"tanky"},
+ {id:"xunbao",n:"寻宝鼠",r:2,d:"天生对宝物敏感。秘境与奇遇收益+50%。",m:{},f:"treasure"},
+ {id:"shafa",n:"杀伐果断",r:2,d:"战斗胜率+30%，心狠手辣。",m:{},f:"fighter"},
+ {id:"meihuo",n:"魅惑众生",r:2,d:"桃花运极旺，红颜事件概率大增。",m:{qy:1},f:"charm"},
+ {id:"laoliu",n:"老六圣体",r:2,d:"打不过就跑，从无失手。逃跑成功率+50%。",m:{},f:"runner"},
+ {id:"yaoguan",n:"药罐子",r:2,d:"从小以丹药为食。丹药效果+50%。",m:{jj:1},f:"med"},
+ {id:"shenli",n:"天生神力",r:2,d:"可越阶战斗，战斗胜率+15%。",m:{},f:"strong"},
+ {id:"haomen",n:"出身豪门",r:1,d:"家境+5，开局资源丰厚。",m:{jj:5}},
+ {id:"gengu",n:"根骨清奇",r:1,d:"根骨+3，寿元+6。",m:{gg:3}},
+ {id:"ercong",n:"耳聪目明",r:1,d:"悟性+2，气运+1。",m:{wx:2,qy:1}},
+ {id:"qin",n:"勤能补拙",r:1,d:"修炼速度+15%。",m:{cult:1.15}},
+ {id:"fuxing",n:"福星高照",r:1,d:"气运+3。",m:{qy:3}},
+ {id:"wuchi",n:"武道痴",r:1,d:"战斗胜率+15%，突破概率+5%。",m:{},f:"wuchi"},
+ {id:"xuantu",n:"炼药学徒",r:1,d:"略懂炼药，炼药成功率提升。",m:{},f:"alchem1"},
+ {id:"shenfa",n:"身法了得",r:1,d:"逃跑成功率+20%。",m:{},f:"runner1"},
+ {id:"tiruo",n:"体弱多病",r:0,d:"寿元-15，修炼速度-10%。",m:{cult:0.9},f:"sick"},
+ {id:"meiyun",n:"霉运缠身",r:0,d:"气运-3，喝水都塞牙。",m:{qy:-3}},
+ {id:"jingmai",n:"经脉堵塞",r:0,d:"修炼速度-30%，突破困难。",m:{cult:0.7}},
+ {id:"ping",n:"平平无奇",r:0,d:"没有任何效果，芸芸众生之一。",m:{}},
+ {id:"luchi",n:"路痴",r:0,d:"秘境中容易迷路，收益-20%。",m:{},f:"lost"},
+ {id:"qiong",n:"穷命",r:0,d:"家境-3。",m:{jj:-3}},
+ {id:"chongdong",n:"冲动易怒",r:0,d:"战斗胜率+10%，但受伤概率+20%，容易惹是生非。",m:{},f:"rash"},
+ {id:"renhou",n:"宅心仁厚",r:0,d:"容易交到朋友，但也容易被背刺。",m:{qy:1},f:"kind"},
+];
+function drawTalents(){
+ const pool=[...TALENTS],out=[];
+ const weights={0:50,1:30,2:15,3:5};
+ while(out.length<10&&pool.length){
+   let tw=pool.reduce((s,t)=>s+weights[t.r],0),x=Math.random()*tw,sel=pool[0];
+   for(const t of pool){x-=weights[t.r];if(x<=0){sel=t;break;}}
+   out.push(sel);pool.splice(pool.indexOf(sel),1);
+ }
+ return out;
+}
+/* ============ 随机事件 ============ */
+const FLAMES=["紫极天火","寒月冰焰","大日金乌炎","九幽冥火","虚空雷炎","青木灵火","血河魔焰","星辰古焱"];
+function hasT(s,id){return s.talents.includes(id);}
+function lucky(s){return Math.random()<(0.12+s.stats.qy*0.015)*(hasT(s,"tianming")?2:1);}
+
+const EVENTS=[
+{t:"山洞奇遇",cond:s=>s.age>=8&&!s.flags.cave,d:"你在后山玩耍时，跌入一个隐蔽的山洞。洞壁上刻满了晦涩的功法口诀，角落里还有一具枯骨，怀中抱着一个木盒。",
+ c:[{t:"参悟壁刻",f:s=>{const g=R(50,200)*(hasT(s,"xunbao")?1.5:1);s.exp+=g;return "你盘坐三日，略有所悟，修为+"+Math.round(g)+"。";}},
+     {t:"打开木盒",f:s=>{if(lucky(s)){s.money+=R(500,2000);s.exp+=150;return "木盒中竟有前人遗留的丹药与金票！修为+150，金钱大增。";}s.exp+=30;return "木盒里只有几本杂记，你读完略有感悟，修为+30。";}},
+     {t:"原路返回",f:s=>{return "你觉得此地阴森，还是先回去吧。";}}]},
+{t:"神秘残魂",cond:s=>s.age>=10&&!s.flags.soul,d:"你在坊市地摊上买到一枚古朴的黑色戒指。深夜，戒指中飘出一道苍老残魂，自称生前是大陆顶尖强者，愿收你为徒。",
+ c:[{t:"拜师",f:s=>{s.flags.master=true;s.stats.wx+=2;return "残魂大笑三声，传你一门高深功法。悟性+2，修炼速度提升，此后每年额外获得修为。";}},
+     {t:"将戒指卖掉",f:s=>{s.money+=300;return "你把戒指卖了300金。虽然有点心疼，但落袋为安。";}},
+     {t:"置之不理",f:s=>{return "你觉得这老头疯疯癫癫，把戒指扔进了河里。";}}]},
+{t:"坊市淘宝",cond:s=>s.age>=8,d:s=>"每月一次的坊市开集了，熙熙攘攘，你只有"+s.money+"金。",
+ c:[{t:"花100金碰运气",f:s=>{if(s.money<100)return "钱不够，只能干看着。";s.money-=100;if(lucky(s)){s.money+=800;return "你花100金买下一块黑铁，擦开竟是玄铁精！转手卖了800金。";}return "买了个破碗，回去越看越像赝品。-100金。";}},
+     {t:"买丹药修炼",f:s=>{if(s.money<200)return "囊中羞涩。";s.money-=200;const g=R(80,160)*(hasT(s,"yaoguan")||hasT(s,"dandi")?1.5:1);s.exp+=g;return "服下聚气丹，药力化开，修为+"+Math.round(g)+"。";}},
+     {t:"闲逛",f:s=>{return "逛了一圈，什么也没买。";}}]},
+{t:"秘境开启",cond:s=>s.r>=1&&!s.flags["mijing"+s.age],d:"传闻黑风山脉有上古秘境开启，各方势力蜂拥而至。你要去凑热闹吗？",
+ c:[{t:"深入秘境",f:s=>{s.flags["mijing"+s.age]=1;const r=Math.random()+(hasT(s,"xunbao")?0.2:0)-(hasT(s,"luchi")?0.2:0);
+   if(r<0.25){injure(s,0.3);return "秘境中机关重重，你身受重伤，侥幸逃出。";}
+   if(r<0.7){const g=R(200,500);s.exp+=g;return "你在秘境中找到一株千年灵草，炼化后修为+"+g+"。";}
+   s.money+=R(1000,3000);s.exp+=300;return "你在一处洞府中发现前人宝藏！金钱大增，修为+300。";}},
+     {t:"在外围捡漏",f:s=>{const g=R(50,150);s.exp+=g;s.money+=R(100,400);return "不敢深入，只在外围寻了些灵草，修为+"+g+"，小赚一笔。";}},
+     {t:"不去",f:s=>{return "机缘虽好，小命更重要。你选择闭关。";}}]},
+{t:"拍卖会",cond:s=>s.money>=500&&s.age>=12,d:"米特拍卖行举办年度大拍，压轴据说是一卷玄阶功法，起拍500金。",
+ c:[{t:"竞拍功法(500金)",f:s=>{s.money-=500;if(lucky(s)){s.stats.qh+=2;return "你以500金拿下玄阶功法《焚天诀》残卷！斗气亲和+2。";}return "价格被抬到天上，你只能放弃，500金报名费打了水漂。";}},
+     {t:"只看不买",f:s=>{return "见识了各方豪强的财力，大开眼界。";}}]},
+{t:"宗门招新",cond:s=>s.age>=10&&s.age<=20&&!s.sect,d:"青云宗开山收徒，方圆百里少年齐聚山门。入宗意味着功法、丹药、庇护。",
+ c:[{t:"参加考核",f:s=>{if(s.stats.qh+s.stats.wx+R(0,6)>=12){s.sect="青云宗";s.exp+=200;return "你通过考核，成为青云宗外门弟子！修为+200，每年宗门发放资源。";}return "考核落选，执事摇头让你明年再来。";}},
+     {t:"不去",f:s=>{return "你志在四方，不愿受宗门束缚。";}}]},
+{t:"宗门大比",cond:s=>!!s.sect&&s.r>=2,d:"宗门大比开始了，胜者可入内门，得长老指点。",
+ c:[{t:"全力一战",f:s=>{const p=realmPower(s.r,s.sg)*(hasT(s,"shafa")?1.3:1)*(hasT(s,"wuchi")?1.15:1)*(hasT(s,"shenli")?1.15:1);
+   if(Math.random()<0.45+p/20000){s.exp+=400;s.money+=1000;return "你连败三名内门弟子，一战成名！修为+400，获得1000金赏赐。";}injure(s,0.25);return "惜败于内门师兄之手，调养了半年。";}},
+     {t:"弃权",f:s=>{return "你选择韬光养晦。";}}]},
+{t:"仇家寻仇",cond:s=>s.age>=14,d:"当年被你羞辱的王家少爷带着两名斗师堵住了你，要一雪前耻。",
+ c:[{t:"迎战",f:s=>{if(fightWin(s,0.5)){s.money+=R(300,800);return "你三招败敌，扬长而去，还顺走了他们的钱袋。";}injure(s,0.4);return "寡不敌众，你拼死突围，身受重伤。";}},
+     {t:"逃跑",f:s=>{if(hasT(s,"laoliu")||hasT(s,"runner")||Math.random()<0.5+ (hasT(s,"shenfa")?0.2:0))return "你施展身法，几个起落消失在密林中。";injure(s,0.3);return "没跑掉，被按在地上摩擦了一顿。";}},
+     {t:"求饶",f:s=>{s.money=Math.floor(s.money/2);return "你跪地求饶，交出一半钱财才得以脱身。";}}]},
+{t:"红颜知己",cond:s=>s.age>=15&&!s.spouse&&(hasT(s,"meihuo")||Math.random()<0.25),d:"灯会上，一位白衣女子与你擦肩而过，回眸一笑，你心跳漏了一拍。",
+ c:[{t:"上前搭讪",f:s=>{if(hasT(s,"meihuo")||Math.random()<0.6){s.spouse="白衣女子";s.stats.qy+=1;return "你们相谈甚欢，她竟是城主之女。从此红袖添香，气运+1。";}return "她看了你一眼，飘然远去。";}},
+     {t:"目送离开",f:s=>{return "有些人，错过便是一生。";}}]},
+{t:"红颜祸水",cond:s=>!!s.spouse&&Math.random()<0.3,d:"你的红颜被城中恶少看上，对方扬言三日后来抢亲。",
+ c:[{t:"决一死战",f:s=>{if(fightWin(s,0.55)){s.flags.hero=true;return "你于城门前一战，恶少落荒而逃，传为佳话。";}return die(s,"为保护红颜，力战而亡。红颜为你守寡终生。")," ";}},
+     {t:"带她远走高飞",f:s=>{s.money=Math.floor(s.money*0.6);return "你们连夜离开此城，隐姓埋名。";}}]},
+{t:"异火出世",cond:s=>s.r>=4&&s.flames.length<3,d:"天现异象，"+pick(FLAMES)+"降世！方圆千里强者齐聚，异火榜又要变天了。",
+ c:[{t:"争夺异火",f:s=>{let ch=0.25+(hasT(s,"yihuo")?0.4:0)+s.stats.qy*0.02;
+   if(Math.random()<ch){const f=pick(FLAMES.filter(x=>!s.flames.includes(x)));s.flames.push(f);return "历经九死一生，你收服了<span class='flame'>"+f+"</span>！战力大增，炼药如虎添翼。";}
+   injure(s,0.5);return "异火狂暴，你被烧成重伤，侥幸捡回一命。";}},
+     {t:"远远观望",f:s=>{s.exp+=100;return "观摩强者争夺异火，若有所悟，修为+100。";}}]},
+{t:"炼药师考核",cond:s=>(hasT(s,"dandi")||hasT(s,"xuantu"))&&!s.flags.yaoshi,d:"炼药师公会公开考核，一品炼药师身份尊贵无比。",
+ c:[{t:"参加",f:s=>{if(hasT(s,"dandi")||Math.random()<0.5){s.flags.yaoshi=true;s.money+=2000;return "你炼制出一品丹药，全场震惊！成为炼药师，财源滚滚。";}return "炸炉了……还好人没事。";}},
+     {t:"不参加",f:s=>{return "时机未到，再沉淀沉淀。";}}]},
+{t:"炼丹",cond:s=>!!s.flags.yaoshi,d:"你开炉炼丹，药香四溢。",
+ c:[{t:"炼制修炼丹",f:s=>{const g=R(150,300)*(hasT(s,"dandi")?2:1);s.exp+=g;return "丹成！服下后修为+"+Math.round(g)+"。";}},
+     {t:"炼制售卖",f:s=>{const m=R(400,900);s.money+=m;return "丹药售出，进账"+m+"金。";}}]},
+{t:"走火入魔",cond:s=>s.r>=2&&Math.random()<0.12,d:"修炼时急于求成，体内斗气乱窜，经脉如刀割般疼痛！",
+ c:[{t:"强行压制",f:s=>{if(Math.random()<0.5+s.stats.wx*0.03){s.exp+=200;return "你守住心神，反而因祸得福，修为+200。";}injure(s,0.4);return "压制失败，经脉受损，修为倒退。";}},
+     {t:"散功重修",f:s=>{s.exp=Math.floor(s.exp*0.7);return "你散去三成修为，保住性命。";}}]},
+{t:"闭关",cond:s=>s.age>=10,d:"你决定闭关一年，不问世事。",
+ c:[{t:"闭关",f:s=>{const g=R(100,250)*cultRate(s);s.exp+=g;return "一年苦修，修为+"+Math.round(g)+"。";}}]},
+{t:"云游四方",cond:s=>s.age>=14,d:"读万卷书不如行万里路，你决定出门游历。",
+ c:[{t:"出发",f:s=>{if(lucky(s)){const g=R(150,400);s.exp+=g;return "游历中得高人指点，修为+"+g+"。";}s.money+=R(100,300);return "一路见闻广博，还顺手做了点小生意。";}}]},
+{t:"强者遗迹",cond:s=>s.r>=3&&!s.flags["ruin"+s.age],d:"大漠深处发现斗圣遗迹，禁制重重。",
+ c:[{t:"闯遗迹",f:s=>{s.flags["ruin"+s.age]=1;const r=Math.random();
+   if(r<0.3){injure(s,0.45);return "触动禁制，九死一生逃出。";}
+   if(r<0.75){s.exp+=R(300,600);return "得遗迹传承，修为大涨。";}
+   s.money+=3000;return "搬空遗迹宝库，金钱+3000！";}},
+     {t:"放弃",f:s=>{return "遗迹凶险，还是命重要。";}}]},
+{t:"被追杀",cond:s=>s.r>=3&&Math.random()<0.15,d:"你怀璧其罪，被三名同阶强者围杀！",
+ c:[{t:"血战到底",f:s=>{if(fightWin(s,0.4)){s.money+=R(500,1500);return "你浴血奋战，反杀三人，缴获颇丰。";}return die(s,"被围杀致死，尸骨无存。")," ";}},
+     {t:"拼命逃跑",f:s=>{if(hasT(s,"laoliu")||Math.random()<0.6)return "你燃烧精血，终于甩掉追兵。";injure(s,0.5);return "逃出生天，但伤及本源。";}}]},
+{t:"收徒",cond:s=>s.r>=5&&!s.flags.tudi,d:"一少年跪在你府前三天三夜，求你收徒。",
+ c:[{t:"收下",f:s=>{s.flags.tudi=true;s.stats.qy+=1;return "你收下弟子，悉心教导。看着他，想起当年的自己。气运+1。";}},
+     {t:"拒绝",f:s=>{return "你挥挥手让他离去。道不同，不相为谋。";}}]},
+{t:"大限将至",cond:s=>s.age>=s.lifespan-5,d:"你感到寿元无多，大限将至。修士逆天改命，还有最后一搏。",
+ c:[{t:"冲击更高境界",f:s=>{s.exp+=500;return "你燃烧寿元，强行冲击，修为+500。是生是死，看这一遭。";}},
+     {t:"安享晚年",f:s=>{s.lifespan+=2;return "你放下执念，含饴弄孙，寿元+2。";}}]},
+{t:"天劫",cond:s=>(s.r===7&&s.sg===9)||(s.r===9&&s.sg===9),d:"<b>九天雷劫</b>降临！渡过则鱼跃龙门，渡不过则身死道消。",
+ c:[{t:"渡劫！",f:s=>{const ch=0.35+s.stats.wx*0.02+s.stats.qy*0.015+(hasT(s,"tongpi")?0.15:0);
+   if(Math.random()<ch){s.trib=1;return "雷劫散去，你沐浴雷光，成功突破大境界！";}return die(s,"倒在了天劫之下，万丈雷霆中化为飞灰。")," ";}}]},
+{t:"丹雷",cond:s=>!!s.flags.yaoshi&&s.r>=6&&Math.random()<0.2,d:"你炼制七品丹药，引来丹雷！",
+ c:[{t:"硬抗丹雷护丹",f:s=>{if(Math.random()<0.6){s.money+=5000;return "丹成！七品丹药出世，各方来贺，金钱+5000。";}injure(s,0.4);return "丹毁人伤。";}},
+     {t:"放弃此丹",f:s=>{return "留得青山在。";}}]},
+{t:"秘境商人",cond:s=>Math.random()<0.2,d:s=>"一位神秘商人拦住你，兜售'九转还魂丹'，要价"+Math.max(100,s.money)+"金，据说能起死回生。",
+ c:[{t:"买下",f:s=>{const cost=Math.max(100,s.money);s.money-=cost;s.flags.revive=true;return "你买下丹药，小心收好。关键时刻或能保命一次。";}},
+     {t:"不买",f:s=>{return "江湖骗子太多，你没上当。";}}]},
+{t:"比武招亲",cond:s=>s.age>=16&&s.age<=35&&!s.spouse&&s.r>=2,d:"城主府比武招亲，胜者抱得美人归，还能得城主府支持。",
+ c:[{t:"上台",f:s=>{if(fightWin(s,0.5)){s.spouse="城主千金";s.money+=3000;s.stats.jj+=2;return "你力压群雄，成为城主乘龙快婿！";}return "被打下擂台，颜面尽失。";}},
+     {t:"围观",f:s=>{return "看了场热闹。";}}]},
+{t:"远古战场",cond:s=>s.r>=6&&Math.random()<0.18,d:"远古战场开启，传闻有斗帝传承！",
+ c:[{t:"进入",f:s=>{const r=Math.random();
+   if(r<0.35){injure(s,0.5);return "战场中远古残魂肆虐，你重伤逃出。";}
+   if(r<0.8){s.exp+=R(500,900);return "得远古强者灌顶，修为暴涨。";}
+   s.flags.doudi_chuancheng=true;return "你竟得到了<b>斗帝传承</b>！修炼速度永久大幅提升！";}},
+     {t:"不去",f:s=>{return "机缘越大，凶险越大。";}}]},
+{t:"心魔",cond:s=>s.r>=4&&Math.random()<0.12,d:"夜半梦回，心魔滋生。过往的杀戮、遗憾化作梦魇缠住你。",
+ c:[{t:"直面心魔",f:s=>{if(Math.random()<0.5+s.stats.wx*0.02){s.stats.wx+=1;return "你斩破心魔，道心通明，悟性+1。";}injure(s,0.3);return "心魔反噬，吐血三升。";}},
+     {t:"逃避",f:s=>{s.exp=Math.floor(s.exp*0.9);return "你不敢面对，道心蒙尘，修为小退。";}}]},
+{t:"好友相求",cond:s=>s.age>=12&&Math.random()<0.2,d:"多年好友重伤，求你转让一枚珍藏的疗伤丹（价值约300金）。",
+ c:[{t:"赠丹",f:s=>{if(s.money>=300){s.money-=300;s.stats.qy+=1;return "你赠丹救人，友情更进一步。善有善报，气运+1。";}return "你囊中羞涩，有心无力。";}
+   },
+     {t:"拒绝",f:s=>{if(hasT(s,"renhou")&&Math.random()<0.5){return "你拒绝了他，午夜梦回有些愧疚。";}return "你婉拒了。修行路上，多是独行。";}}]},
+{t:"黑市",cond:s=>s.money>=800&&s.age>=14,d:"黑市中有人拍卖'残破的帝兵碎片'，起拍800金。",
+ c:[{t:"拍下",f:s=>{s.money-=800;if(lucky(s)){s.flags.dibing=true;return "碎片中竟蕴含一丝帝威！炼化后战力大增。";}return "碎片只是凡铁，你被骗了。";}},
+     {t:"离开",f:s=>{return "黑市水深，你转身离开。";}}]},
+{t:"兽潮",cond:s=>s.r>=2&&Math.random()<0.12,d:"兽潮爆发！无数魔兽冲击城池，城主府征召强者守城。",
+ c:[{t:"守城",f:s=>{if(fightWin(s,0.6)){s.money+=R(800,2000);s.exp+=200;return "你于城头连斩三头五阶魔兽，名声大噪，获重赏。";}injure(s,0.4);return "兽潮凶猛，你身受重伤。";}},
+     {t:"躲起来",f:s=>{return "你躲进地窖，兽潮过后才出来。";}}]},
+{t:"顿悟",cond:s=>Math.random()<0.1+s.stats.wx*0.008,d:"某日观云卷云舒，你忽有所悟，进入顿悟状态！",
+ c:[{t:"顿悟",f:s=>{const g=R(200,500);s.exp+=g;return "顿悟三日，修为+"+g+"！";}}]},
+{t:"经脉寸断",cond:s=>hasT(s,"tiruo")&&Math.random()<0.15,d:"你旧疾复发，经脉如针扎般疼痛。",
+ c:[{t:"寻医问药",f:s=>{if(s.money>=300){s.money-=300;return "重金求医，病情暂时压住。";}return die(s,"旧疾复发，无钱医治，病死榻上。")," ";}},
+     {t:"硬扛",f:s=>{if(Math.random()<0.5)return "扛过去了。";injure(s,0.3);return "病情加重。";}}]},
+{t:"贵人相助",cond:s=>s.stats.jj>=8&&Math.random()<0.2,d:"家族长辈见你天资不错，赐下修炼资源。",
+ c:[{t:"接受",f:s=>{const g=R(150,350);s.exp+=g;s.money+=500;return "得家族资助，修为+"+g+"，金钱+500。";}}]},
+{t:"散修劫道",cond:s=>s.age>=12&&Math.random()<0.15,d:"荒郊野外，一伙散修拦路，要你交出钱财！",
+ c:[{t:"交钱",f:s=>{const l=Math.floor(s.money*0.5);s.money-=l;return "破财消灾，损失"+l+"金。";}},
+     {t:"反杀",f:s=>{if(fightWin(s,0.55)){const g=R(200,600);s.money+=g;return "你反杀劫修，缴获"+g+"金。";}injure(s,0.4);return "踢到铁板，被洗劫一空。";}}]},
+{t:"洞府",cond:s=>lucky(s)&&s.age>=10,d:"你在一处悬崖下发现隐蔽洞府，石门紧闭。",
+ c:[{t:"推门进入",f:s=>{const r=Math.random();
+   if(r<0.3){s.exp+=R(200,400);return "洞府主人留下传承，修为大涨。";}
+   if(r<0.6){s.money+=R(1000,2500);return "洞府中有前人宝藏！";}
+   return "洞府空无一物，只有一行字：'有缘人，好自为之'。";}},
+     {t:"离开",f:s=>{return "你没有贸然闯入。";}}]},
+{t:"论道大会",cond:s=>s.r>=3&&Math.random()<0.15,d:"天机阁举办论道大会，各路天骄论道。",
+ c:[{t:"参加",f:s=>{if(s.stats.wx>=8||Math.random()<0.4){s.stats.wx+=1;s.exp+=150;return "你一番高论折服众人，悟性+1，修为+150。";}return "被人辩得哑口无言，灰溜溜下台。";}},
+     {t:"旁听",f:s=>{s.exp+=80;return "旁听有所得，修为+80。";}}]},
+{t:"采药",cond:s=>s.age>=8&&Math.random()<0.25,d:"你进山采药，补贴家用。",
+ c:[{t:"采药",f:s=>{const m=R(50,200);s.money+=m;if(lucky(s)){s.exp+=100;return "竟采到一株灵药！卖了"+m+"金，留了点自己服用，修为+100。";}return "采了些普通药材，卖了"+m+"金。";}}]},
+{t:"打工",cond:s=>s.money<200&&s.age>=10,d:"囊中羞涩，你决定去码头扛包赚点钱。",
+ c:[{t:"扛包",f:s=>{const m=R(80,150);s.money+=m;return "辛苦一年，赚了"+m+"金。";}}]},
+{t:"寿宴",cond:s=>s.age>=40&&Math.random()<0.2,d:"一位斗皇强者举办千岁寿宴，广邀宾客。",
+ c:[{t:"赴宴",f:s=>{if(s.r>=6){s.exp+=200;return "你与寿星相谈甚欢，得其指点，修为+200。";}return "蹭了一顿好酒好菜。";}}]},
+{t:"收服魔兽",cond:s=>s.r>=2&&Math.random()<0.15,d:"山林中遇到一头受伤的幼年魔兽，目光桀骜。",
+ c:[{t:"收服",f:s=>{if(hasT(s,"xunbao")||Math.random()<0.4+s.stats.qy*0.02){s.flags.pet=true;return "魔兽认你为主！战力提升，赶路也有伴了。";}return "魔兽咬了你一口跑了。";}},
+     {t:"放生",f:s=>{s.stats.qy+=1;return "你放它离去。气运+1。";}}]},
+{t:"镇压暴动",cond:s=>!!s.sect&&s.r>=3&&Math.random()<0.15,d:"宗门附属城池发生暴动，宗门派你前去镇压。",
+ c:[{t:"前往",f:s=>{if(fightWin(s,0.6)){s.exp+=250;s.money+=800;return "你雷霆手段平定暴动，宗门赏识。";}injure(s,0.35);return "暴动中有高手，你负伤而归。";}},
+     {t:"称病不去",f:s=>{return "你推说闭关，躲过一劫。";}}]},
+{t:"双修",cond:s=>!!s.spouse&&s.age>=18&&Math.random()<0.25,d:"你与道侣双修，阴阳交泰。",
+ c:[{t:"双修",f:s=>{const g=R(120,280);s.exp+=g;return "一夜双修，修为+"+g+"。";}}]},
+{t:"子嗣",cond:s=>!!s.spouse&&s.age>=20&&s.age<=45&&!s.flags.child&&Math.random()<0.3,d:"道侣有喜！",
+ c:[{t:"大喜",f:s=>{s.flags.child=true;s.stats.qy+=1;return "喜得麟儿（或凤女），你老怀大慰，气运+1。";}}]},
+{t:"大限",cond:s=>s.age>=s.lifespan,d:"油尽灯枯。",
+ c:[{t:"寿终正寝",f:s=>{return die(s,"寿元耗尽，安然离世，享年"+s.age+"岁。")," ";}}]},
+];
+/* ============ 核心逻辑 ============ */
+var S=null, draftTalents=[], selTalents=[];
+const SURN=["萧","林","叶","苏","秦","楚","云","风","龙","凤","石","武","唐","韩","江"];
+const GIVN=["炎","辰","风","云","天","昊","宇","轩","逸","尘","洛","枫","夜","寒","阳"];
+
+function newLife(){
+ draftTalents=drawTalents();selTalents=[];
+ renderTalentGrid();show('s-talent');
+}
+function renderTalentGrid(){
+ const g=document.getElementById('t-grid');g.innerHTML="";
+ draftTalents.forEach((t,i)=>{
+  const d=document.createElement('div');
+  d.className='talent'+(selTalents.includes(i)?' sel':'');
+  d.innerHTML=`<span class="r r${t.r}">${RNAME[t.r]}</span><div class="nm">${t.n}</div><div class="ds">${t.d}</div>`;
+  d.onclick=()=>{
+   if(selTalents.includes(i))selTalents=selTalents.filter(x=>x!==i);
+   else if(selTalents.length<3)selTalents.push(i);
+   document.getElementById('t-pick').textContent=selTalents.length+"/3";
+   document.getElementById('t-ok').disabled=selTalents.length!==3;
+   renderTalentGrid();
+  };
+  g.appendChild(d);
+ });
+}
+function confirmTalents(){
+ const nm=(document.getElementById('ipt-name').value||"").trim()||pick(SURN)+pick(GIVN)+pick(GIVN);
+ const st={qh:R(1,10),wx:R(1,10),gg:R(1,10),qy:R(1,10),jj:R(1,10)};
+ const T=selTalents.map(i=>draftTalents[i]);
+ T.forEach(t=>{const m=t.m||{};for(const k in m){if(k==='cult')continue;st[k]=clamp((st[k]||0)+m[k],1,15);}});
+ S={name:nm,age:0,r:0,sg:1,exp:0,need:calcNeed(0,1),stats:st,
+    talents:T.map(t=>t.id),talentObjs:T,flags:{},flames:[],money:st.jj*120,
+    spouse:null,sect:null,lifespan:60+st.gg*3,alive:true,timeline:[],maxR:0,maxSg:1,kills:0,forceEvent:null,trib:0};
+ S.lifespan-=T.some(t=>t.id==="tiruo")?15:0;
+ S.lifespan+=T.some(t=>t.id==="tongpi")?12:0;
+ S.lifespan+=T.some(t=>t.id==="gengu")?6:0;
+ show('s-main');renderStats();
+ const home=S.stats.jj>=10?"名门望族":S.stats.jj>=7?"小康之家":S.stats.jj>=4?"平民百姓":"贫苦人家";
+ showCard("出生","斗气大陆，加玛帝国偏远小城。<br><br>你出生在"+home+"，取名<b>"+nm+"</b>。"+(T.some(t=>t.id==="doudi")?"<br>出生那日，天现异象，族中长老断言你血脉不凡！":""),
+  [{t:"开始人生",f:()=>{addLog("出生于"+home);return "呱呱坠地，人生开局。";}}]);
+}
+function calcNeed(r,sg){return Math.round(60*Math.pow(1.35,r)*(1+sg*0.25));}
+function cultRate(s){
+ let c=1;s.talentObjs.forEach(t=>{if(t.m&&t.m.cult)c*=t.m.cult;});
+ if(hasT(s,"lunhui"))c*=s.age<30?0.7:2;
+ if(s.flags.master)c*=1.3;
+ if(s.flags.doudi_chuancheng)c*=1.5;
+ if(s.sect)c*=1.2;
+ return c;
+}
+function realmNameFull(s){return realmName(s.r,s.sg);}
+function addLog(t){S.timeline.push(S.age+"岁 · "+t);const l=document.getElementById('m-log');const d=document.createElement('div');d.textContent=S.age+"岁 · "+t;l.prepend(d);}
+
+function startYear(){
+ if(!S.alive)return;
+ S.age++;
+ if(S.age>=S.lifespan){die(S,"寿元耗尽，安然离世，享年"+S.age+"岁。");showEnding();return;}
+ // 修炼
+ const g=Math.round((30+S.stats.qh*10+S.r*40)*cultRate(S)*(0.8+Math.random()*0.5));
+ S.exp+=g;
+ let grew=tryBreakthrough();
+ if(S.sect){S.money+=200;S.exp+=Math.round(30*cultRate(S));}
+ if(S.flags.master)S.exp+=Math.round(40*cultRate(S));
+ renderStats();
+ // 强制天劫
+ if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9)){
+   const ev=EVENTS.find(e=>e.t==="天劫");showEvent(ev);return;
+ }
+ // 随机事件
+ const elig=EVENTS.filter(e=>e.t!=="天劫"&&e.t!=="大限"&&(!e.cond||e.cond(S)));
+ if(elig.length&&Math.random()<0.75){showEvent(pick(elig));}
+ else{showCard("平静的一年",S.age+"岁，你潜心修炼，修为+"+g+"。"+(grew?"<br><b>并成功突破！</b>":""),
+   [{t:"下一年",f:()=>""}]);}
+}
+function tryBreakthrough(){
+ let grew=false;
+ while(S.exp>=S.need&&S.r<10){
+   if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9))break; // 等天劫事件
+   const big=S.sg>=REALMS[S.r].s;
+   const ch=big?0.45+S.stats.wx*0.02+S.stats.qy*0.01:0.75+S.stats.wx*0.02+(hasT(S,"wuchi")?0.05:0);
+   if(Math.random()<Math.min(ch,0.98)){
+     S.exp-=S.need;advanceRealm();grew=true;
+   }else{
+     S.exp=Math.floor(S.need*0.5);
+     if(big&&Math.random()<0.3)injure(S,0.25);
+     addLog("突破"+realmName(S.r,S.sg+ (big?1:S.sg))+"失败");
+     break;
+   }
+ }
+ return grew;
+}
+function advanceRealm(){
+ if(S.sg>=REALMS[S.r].s){S.r++;S.sg=1;S.lifespan+=BIGBONUS[S.r]||0;
+   addLog("突破至<b>"+realmNameFull(S)+"</b>！寿元大增");}
+ else{S.sg++;addLog("突破至"+realmNameFull(S));}
+ if(S.r>S.maxR||(S.r===S.maxR&&S.sg>S.maxSg)){S.maxR=S.r;S.maxSg=S.sg;}
+ S.need=calcNeed(S.r,S.sg);
+}
+function fightWin(s,base){
+ let ch=base;
+ if(hasT(s,"shafa"))ch+=0.3;if(hasT(s,"wuchi"))ch+=0.15;if(hasT(s,"shenli"))ch+=0.15;
+ if(hasT(s,"chongdong"))ch+=0.1;
+ ch+=s.stats.qy*0.01;
+ const win=Math.random()<clamp(ch,0.05,0.95);
+ if(win)s.kills++;
+ return win;
+}
+function injure(s,sev){
+ s.exp=Math.floor(s.exp*(1-sev*0.4));
+ if(Math.random()<sev*0.12&&!hasT(s,"tongpi")){die(s,"重伤不治，撒手人寰，享年"+s.age+"岁。");return true;}
+ addLog("身受重伤");
+ return false;
+}
+function die(s,cause){
+ if(s.flags.revive&&!cause.includes("寿元")){s.flags.revive=false;addLog("九转还魂丹救了你一命！");return false;}
+ s.alive=false;s.cause=cause;return true;
+}
+
+/* ============ 界面 ============ */
+function renderStats(){
+ document.getElementById('m-realm').textContent=realmNameFull(S);
+ document.getElementById('m-age').textContent=S.age+" 岁 / 寿元 "+S.lifespan;
+ document.getElementById('m-expbar').style.width=Math.min(100,S.exp/S.need*100)+"%";
+ const st=S.stats;
+ let h=`<div class="stat-row"><span>斗气亲和</span><b>${st.qh}</b></div>
+ <div class="stat-row"><span>悟性</span><b>${st.wx}</b></div>
+ <div class="stat-row"><span>根骨</span><b>${st.gg}</b></div>
+ <div class="stat-row"><span>气运</span><b>${st.qy}</b></div>
+ <div class="stat-row"><span>家境</span><b>${st.jj}</b></div>
+ <div class="stat-row"><span>金钱</span><b>${S.money}</b></div>`;
+ if(S.sect)h+=`<div class="stat-row"><span>宗门</span><b>${S.sect}</b></div>`;
+ if(S.spouse)h+=`<div class="stat-row"><span>道侣</span><b>${S.spouse}</b></div>`;
+ if(S.flames.length)h+=`<div class="stat-row"><span>异火</span><b class="flame">${S.flames.join("、")}</b></div>`;
+ h+=`<div class="stat-row"><span>天赋</span><b style="font-size:12px">${S.talentObjs.map(t=>t.n).join("、")}</b></div>`;
+ document.getElementById('m-stats').innerHTML=h;
+}
+function showCard(title,desc,choices){
+ document.getElementById('e-title').textContent=title;
+ document.getElementById('e-desc').innerHTML=desc;
+ const box=document.getElementById('e-choices');box.innerHTML="";
+ choices.forEach(c=>{
+  const b=document.createElement('button');b.className='btn';b.textContent=c.t;
+  if(c.raw){b.onclick=()=>{c.f(S);renderStats();if(!S.alive)showEnding();};}
+  else b.onclick=()=>{
+   const res=c.f(S)||"";
+   if(S.trib){S.trib=0;S.r++;S.sg=1;S.exp=0;S.need=calcNeed(S.r,S.sg);S.lifespan+=BIGBONUS[S.r]||0;
+     if(S.r>S.maxR){S.maxR=S.r;S.maxSg=1;}addLog("渡过天劫，成就<b>"+realmNameFull(S)+"</b>！");}
+   renderStats();
+   if(!S.alive){showEnding();return;}
+   showCard(title,res,[{t:"下一年",f:()=>startYear(),raw:true}]);
+  };
+  box.appendChild(b);
+ });
+}
+function showEvent(ev){
+ const desc=typeof ev.d==="function"?ev.d(S):ev.d;
+ showCard(ev.t,desc,ev.c);
+}
+const RANKT=["⚰️","🌱","🗡️","🛡️","👑","🔥","⛰️","🌩️","🐉","✨","☀️"];
+const RANKN=["泯然众人","初入斗气","一方好手","小有名气","斗王强者","斗皇老祖","斗宗传奇","斗尊大能","斗圣传说","半步斗帝","千古斗帝"];
+function showEnding(){
+ const i=Math.min(S.maxR,10);
+ document.getElementById('e-rank').textContent=RANKT[i]||"⚰️";
+ document.getElementById('e-etitle').textContent=S.name+" · "+RANKN[i];
+ document.getElementById('e-edesc').innerHTML=(S.cause||"离世")+"<br>享年 "+S.age+" 岁";
+ const tl=S.timeline.slice(-8).reverse().map(t=>`<div class="stat-row"><span>${t}</span></div>`).join("");
+ document.getElementById('e-eval').innerHTML=
+  `<div class="stat-row"><span>最高境界</span><b>${realmName(S.maxR,S.maxSg)}</b></div>
+   <div class="stat-row"><span>收服异火</span><b class="flame">${S.flames.length?S.flames.join("、"):"无"}</b></div>
+   <div class="stat-row"><span>斩杀</span><b>${S.kills} 人</b></div>
+   <div class="stat-row"><span>金钱</span><b>${S.money}</b></div>
+   <div style="margin-top:10px;font-size:13px;color:#8a7a5c">人生剪影</div>${tl||"<div class='tip'>碌碌无为的一生</div>"}`;
+ show('s-end');
+}
+// 随机名
+if(!document.getElementById('ipt-name').value)document.getElementById('ipt-name').placeholder="如："+pick(SURN)+pick(GIVN);
+</script>
+</body>
+</html>
