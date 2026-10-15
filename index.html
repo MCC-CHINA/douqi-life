@@ -119,10 +119,14 @@ function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.re
 const REALMS=[
  {n:"斗之气",s:9},{n:"斗者",s:9},{n:"斗师",s:9},{n:"大斗师",s:9},
  {n:"斗灵",s:9},{n:"斗王",s:9},{n:"斗皇",s:9},{n:"斗宗",s:9},
- {n:"斗尊",s:9},{n:"斗圣",s:9},{n:"斗帝",s:1}
+ {n:"斗尊",s:9},{n:"斗圣",s:9},{n:"斗帝",s:1},
+ {n:"至尊",s:9,sgn:["","一品","二品","三品","四品","五品","六品","七品","八品","九品"]},
+ {n:"地至尊",s:1},
+ {n:"天至尊",s:3,sgn:["","灵品","仙品","圣品"]},
+ {n:"主宰",s:1}
 ];
-const BIGBONUS=[0,0,0,0,0,30,60,120,250,500,1000]; // 大境界寿元加成
-function realmName(r,sg){return REALMS[r].n+(REALMS[r].s>1?["","一","二","三","四","五","六","七","八","九"][sg]:"");}
+const BIGBONUS=[0,0,0,0,0,30,60,120,250,500,1000,2000,4000,8000,20000]; // 大境界寿元加成
+function realmName(r,sg){const R=REALMS[r];if(!R||R.s===1)return R?R.n:"";const nm=R.sgn||["","一","二","三","四","五","六","七","八","九"];return R.n+(nm[sg]||"");}
 function realmPower(r,sg){ // 战力估算
  let p=0;for(let i=0;i<r;i++)p+=Math.pow(3.2,i)*9;
  return p+Math.pow(3.2,r)*sg;
@@ -314,9 +318,10 @@ const EVENTS=[
 {t:"大限将至",cond:s=>s.age>=s.lifespan-5,d:"你感到寿元无多，大限将至。修士逆天改命，还有最后一搏。",
  c:[{t:"冲击更高境界",f:s=>{s.exp+=500;return "你燃烧寿元，强行冲击，修为+500。是生是死，看这一遭。";}},
      {t:"安享晚年",f:s=>{s.lifespan+=2;return "你放下执念，含饴弄孙，寿元+2。";}}]},
-{t:"天劫",cond:s=>(s.r===7&&s.sg===9)||(s.r===9&&s.sg===9),d:"<b>九天雷劫</b>降临！渡过则鱼跃龙门，渡不过则身死道消。",
- c:[{t:"渡劫！",f:s=>{const ch=0.35+s.stats.wx*0.02+s.stats.qy*0.015+(hasT(s,"tongpi")?0.15:0);
-   if(Math.random()<ch){s.trib=1;return "雷劫散去，你沐浴雷光，成功突破大境界！";}return die(s,"倒在了天劫之下，万丈雷霆中化为飞灰。")," ";}}]},
+{t:"天劫",cond:s=>(s.r===7&&s.sg===9)||(s.r===9&&s.sg===9)||(s.r===11&&s.sg===9)||(s.r===13&&s.sg===3),
+ d:s=>(s.r===13?"<b>主宰大劫</b>降临！三千雷霆，万道霞光，这是超脱的最后一步。渡过则与天同寿，渡不过则万劫不复。":"<b>九天雷劫</b>降临！渡过则鱼跃龙门，渡不过则身死道消。"),
+ c:[{t:"渡劫！",f:s=>{const base=s.r===13?0.25:0.35;const ch=base+s.stats.wx*0.02+s.stats.qy*0.015+(hasT(s,"tongpi")?0.15:0)+(s.fashen?s.fashen.f*0.3:0);
+   if(Math.random()<ch){s.trib=1;return s.r===13?"大劫散去，霞光万道，你超脱天地！":"雷劫散去，你沐浴雷光，成功突破大境界！";}return die(s,"倒在了天劫之下，万丈雷霆中化为飞灰。")," ";}}]},
 {t:"丹雷",cond:s=>!!s.flags.yaoshi&&s.r>=6&&Math.random()<0.2,d:"你炼制七品丹药，引来丹雷！",
  c:[{t:"硬抗丹雷护丹",f:s=>{if(Math.random()<0.6){s.money+=5000;return "丹成！七品丹药出世，各方来贺，金钱+5000。";}injure(s,0.4);return "丹毁人伤。";}},
      {t:"放弃此丹",f:s=>{return "留得青山在。";}}]},
@@ -539,6 +544,23 @@ const EVENTS=[
 {t:"神秘斗技",cond:s=>lucky(s)&&s.r>=2,d:"一位神秘老者在巷口摆摊，卖一本无字天书，说是有缘者得之。",
  c:[{t:"买下(300金)",f:s=>{if(s.money<300)return "钱不够。";s.money-=300;const w=gainDouji(s,Math.random()<0.3?2:1);return w?"天书遇血显字，竟是"+RANKS[w.t]+"斗技「"+w.n+"」！":"天书毫无反应，你被骗了。";}},
      {t:"不买",f:s=>{return "江湖骗子多。";}}]},
+{t:"飞升之机",cond:s=>s.r>=10&&!s.flags.feisheng&&!s.flags.stay,d:"你已至斗帝巅峰，忽感上界召唤：斗气大陆不过是一处下位面，其上还有浩瀚无垠的<b>大千世界</b>。在那里，至尊多如繁星，地至尊、天至尊纵横，更有传说中的主宰境……飞升，还是留下？",
+ c:[{t:"飞升大千世界",f:s=>{s.flags.feisheng=true;s.lifespan+=5000;unlock(s,"feisheng");addLog("<b>你破碎虚空，飞升大千世界！</b>");return "你破碎虚空而去！大千世界灵气浓郁至极，寿元+5000。新的征程，开始了。";}},
+     {t:"留在下位面",f:s=>{s.flags.stay=true;addLog("你选择留在斗气大陆");return "你选择留在斗气大陆，做逍遥自在、无敌于世的千古斗帝。";}}]},
+{t:"法身遗迹",cond:s=>!!s.flags.feisheng&&s.r>=11&&!s.flags["fs"+s.age],d:"大千世界流传着九十九种至尊法身，名列《法身榜》。传闻附近有上古强者坐化，法身传承未散。",
+ c:[{t:"寻法身传承",f:s=>{s.flags["fs"+s.age]=1;const r=Math.random();
+   if(r<0.3){injure(s,0.4);return "遗迹中有残存灵阵，你重伤而退。";}
+   const w=gainFashen(s,r<0.65?1:2);return w?"你得到"+RANKS[w.t]+"至尊法身「"+w.n+"」的修炼之法！":"传承已散，只剩空荡荡的石室。";}},
+     {t:"放弃",f:s=>{return "机缘未到。";}}]},
+{t:"域外邪族",cond:s=>!!s.flags.feisheng&&Math.random()<0.12,d:"<b>域外邪族</b>入侵！黑雾遮天，无数邪族强者杀来，大千世界各方势力紧急结盟御敌。",
+ c:[{t:"参战",f:s=>{if(fightWin(s,0.55)){s.exp+=R(800,1500);s.money+=R(1000,3000);if(Math.random()<0.4){const w=gainFashen(s,1);return "你于万军之中斩杀邪族统领，名扬大千！"+(w?"缴获法身卷轴「"+w.n+"」。":"")+"修为精进。";}return "你奋勇杀敌，立下战功，修为精进。";}injure(s,0.45);return "邪族强者太多，你重伤撤回。";}},
+     {t:"避战",f:s=>{return "你选择保存实力。";}}]},
+{t:"大千灵院",cond:s=>!!s.flags.feisheng&&!s.sect&&s.r>=11,d:"大千世界五大灵院之一的使者看中了你，邀你加入灵院修行，承诺倾力培养。",
+ c:[{t:"加入",f:s=>{s.sect="大千灵院";s.money+=1000;return "你加入大千灵院！灵院藏经阁任你翻阅，修行资源无数。";}},
+     {t:"拒绝",f:s=>{return "你习惯了独来独往。";}}]},
+{t:"法身榜争夺",cond:s=>!!s.fashen&&s.r>=12&&Math.random()<0.15,d:s=>"你的「"+s.fashen.n+"」名列法身榜，一位地至尊上门挑战，要将你的排名踩下去！",
+ c:[{t:"应战",f:s=>{if(fightWin(s,0.5)){s.exp+=600;return "你强势守住排名，声名更盛，修为+600。";}injure(s,0.4);return "惜败一招，法身榜排名下滑。";}},
+     {t:"避战",f:s=>{return "暂避锋芒。";}}]},
 ];
 /* ============ 品阶 ============ */
 const RANKS=["凡品","黄阶","玄阶","地阶","天阶","圣阶"];
@@ -598,7 +620,9 @@ const ACHS=[
  {id:"long",n:"长生者",d:"活过300岁"},{id:"gongfa",n:"功法有成",d:"习得一门功法"},
  {id:"danhui",n:"丹会魁首",d:"夺得炼药师大会魁首"},{id:"revive",n:"大难不死",d:"九转还魂丹救命"},
  {id:"love",n:"情深意重",d:"有道侣有子嗣"},
- {id:"fenjue",n:"焚诀传人",d:"获得焚诀"}
+ {id:"fenjue",n:"焚诀传人",d:"获得焚诀"},
+ {id:"feisheng",n:"飞升大千",d:"飞升大千世界"},
+ {id:"zhuzai",n:"大主宰",d:"证道主宰"}
 ];
 /* ============ 武器 ============ */
 const WEAPONS=[
@@ -619,6 +643,19 @@ function gainDouji(s,tier){
  const cands=DOUJI.filter(w=>w.t===tier);if(!cands.length)return null;
  const w=pick(cands);
  if(!s.douji||w.f>s.douji.f){const old=s.douji;s.douji=w;addLog("习得"+RANKS[w.t]+"斗技「"+w.n+"」"+(old?"（替换"+old.n+"）":""));}
+ return w;
+}
+/* ============ 至尊法身 ============ */
+const FASHEN=[
+ {n:"山岳法身",t:0,f:0.1,c:0.05},{n:"青木法身",t:0,f:0.08,c:0.08},{n:"烈焰法身",t:0,f:0.12,c:0.03},
+ {n:"九幽法身",t:1,f:0.2,c:0.1},{n:"雷狱法身",t:1,f:0.22,c:0.08},{n:"寒冰法身",t:1,f:0.18,c:0.12},
+ {n:"修罗法身",t:2,f:0.32,c:0.15},{n:"星辰法身",t:2,f:0.3,c:0.18},{n:"真龙法身",t:2,f:0.35,c:0.12},
+ {n:"大日不灭身",t:3,f:0.5,c:0.25},{n:"混沌法身",t:3,f:0.48,c:0.28},{n:"万古不朽身",t:3,f:0.55,c:0.3}
+];
+function gainFashen(s,tier){
+ const cands=FASHEN.filter(w=>w.t===tier);if(!cands.length)return null;
+ const w=pick(cands);
+ if(!s.fashen||w.f>s.fashen.f){const old=s.fashen;s.fashen=w;addLog("凝聚"+RANKS[w.t]+"至尊法身「"+w.n+"」"+(old?"（替换"+old.n+"）":""));}
  return w;
 }
 function gainWeapon(s,tier){
@@ -688,7 +725,7 @@ function spendLingqi(n){if(getLingqi()<n)return false;addLingqi(-n);return true;
 function getUnlocked(){try{return JSON.parse(localStorage.getItem("dq_unlocked")||"[]")}catch(e){return[]}}
 function unlockTalent(id){const u=getUnlocked();if(!u.includes(id)){u.push(id);try{localStorage.setItem("dq_unlocked",JSON.stringify(u))}catch(e){}}}
 function earnLingqi(s){
- const lq=s.maxR*15+Object.keys(s.ach).length*8+Math.floor(s.age/20)+s.flames.length*10;
+ const lq=s.maxR*15+Object.keys(s.ach).length*8+Math.floor(s.age/20)+s.flames.length*10+(s.flags.feisheng?100:0)+(s.maxR>=14?300:0);
  addLingqi(lq);return lq;
 }
 function setCarry(id){try{localStorage.setItem("dq_carry",id)}catch(e){}}
@@ -726,7 +763,7 @@ function confirmTalents(){
  const T=selTalents.map(i=>draftTalents[i]);
  T.forEach(t=>{const m=t.m||{};for(const k in m){if(k==='cult')continue;st[k]=clamp((st[k]||0)+m[k],1,15);}});
  S={name:nm,age:0,r:0,sg:1,exp:0,need:calcNeed(0,1),stats:st,
-    talents:T.map(t=>t.id),talentObjs:T,flags:{},flames:[],money:st.jj*120,gongfas:[],weapon:null,douji:null,fenjue:null,ypRank:0,ach:{},clan:null,clanId:null,
+    talents:T.map(t=>t.id),talentObjs:T,flags:{},flames:[],money:st.jj*120,gongfas:[],weapon:null,douji:null,fashen:null,fenjue:null,ypRank:0,ach:{},clan:null,clanId:null,
     spouse:null,sect:null,lifespan:60+st.gg*3,alive:true,timeline:[],maxR:0,maxSg:1,kills:0,forceEvent:null,trib:0};
  S.lifespan-=T.some(t=>t.id==="tiruo")?15:0;
  S.lifespan+=T.some(t=>t.id==="tongpi")?12:0;
@@ -742,13 +779,14 @@ function confirmTalents(){
  showCard("出生","斗气大陆，加玛帝国偏远小城。<br><br>你出生在"+home+"，取名<b>"+nm+"</b>。"+(T.some(t=>t.id==="doudi")?"<br>出生那日，天现异象，族中长老断言你血脉不凡！":""),
   [{t:"开始人生",f:()=>{addLog("出生于"+home);return "呱呱坠地，人生开局。";}}]);
 }
-function calcNeed(r,sg){return Math.round(60*Math.pow(1.35,r)*(1+sg*0.25));}
+function calcNeed(r,sg){const m=r>=11?5:1;return Math.round(60*Math.pow(1.35,r)*(1+sg*0.25)*m);}
 function cultRate(s){
  let c=1;s.talentObjs.forEach(t=>{if(t.m&&t.m.cult)c*=t.m.cult;});
  if(hasT(s,"lunhui"))c*=s.age<30?0.7:2;
  if(s.flags.master)c*=1.3;
  c*=gongfaMult(s);
  if(s.fenjue)c*=(1.5+0.15*s.fenjue.fused);
+ if(s.fashen)c*=(1+s.fashen.c);
  c*=flameBonusRefined(s,"cult");
  if(s.flags.doudi_chuancheng)c*=1.5;
  if(s.sect)c*=1.2;
@@ -772,7 +810,7 @@ function startYear(){
  if(S.flags.master)S.exp+=Math.round(40*cultRate(S));
  renderStats();
  // 强制天劫
- if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9)){
+ if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9)||(S.r===11&&S.sg===9)||(S.r===13&&S.sg===3)){
    const ev=EVENTS.find(e=>e.t==="天劫");showEvent(ev);return;
  }
  // 随机事件
@@ -783,8 +821,9 @@ function startYear(){
 }
 function tryBreakthrough(){
  let grew=false;
- while(S.exp>=S.need&&S.r<10){
-   if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9))break; // 等天劫事件
+ while(S.exp>=S.need&&S.r<14){
+   if(S.r===10&&!S.flags.feisheng)break; // 未飞升不得入至尊
+   if((S.r===7&&S.sg===9)||(S.r===9&&S.sg===9)||(S.r===11&&S.sg===9)||(S.r===13&&S.sg===3))break; // 等天劫事件
    const big=S.sg>=REALMS[S.r].s;
    const ch=big?0.45+S.stats.wx*0.02+S.stats.qy*0.01:0.75+S.stats.wx*0.02+(hasT(S,"wuchi")?0.05:0);
    if(Math.random()<Math.min(ch+flameBonusRefined(S,"brk"),0.98)){
@@ -803,7 +842,9 @@ function advanceRealm(){
    addLog("突破至<b>"+realmNameFull(S)+"</b>！寿元大增");
    if(hasT(S,"jiuzhuan")){S.stats.qh++;S.stats.wx++;S.stats.gg++;S.stats.qy++;addLog("九转金身：全属性+1");}
    if(S.r===1)unlock(S,"douzhe");if(S.r===5)unlock(S,"douwang");
-   if(S.r===6)unlock(S,"douhuang");if(S.r===10)unlock(S,"doudi");}
+   if(S.r===6)unlock(S,"douhuang");if(S.r===10)unlock(S,"doudi");
+   if(S.r===11)addLog("你踏入至尊境，大千世界任你驰骋！");
+   if(S.r===14){unlock(S,"zhuzai");S.lifespan+=50000;addLog("<b>你证道主宰，与天同寿！</b>");}}
  else{S.sg++;addLog("突破至"+realmNameFull(S));}
  if(S.r>S.maxR||(S.r===S.maxR&&S.sg>S.maxSg)){S.maxR=S.r;S.maxSg=S.sg;}
  S.need=calcNeed(S.r,S.sg);
@@ -818,6 +859,7 @@ function fightWin(s,base){
  ch+=flameBonusRefined(s,"fight");
  if(s.weapon)ch+=s.weapon.f;
  if(s.douji)ch+=s.douji.f;
+ if(s.fashen)ch+=s.fashen.f;
  if(s.clanId==="tianjian")ch+=0.15;
  ch+=s.stats.qy*0.01;
  const win=Math.random()<clamp(ch,0.05,0.95);
@@ -856,6 +898,7 @@ function renderStats(){
  if(S.weapon)h+=`<div class="stat-row"><span>武器</span><b>「${S.weapon.n}」${rankTag(S.weapon.t)}</b></div>`;
  if(S.douji)h+=`<div class="stat-row"><span>斗技</span><b>「${S.douji.n}」${rankTag(S.douji.t)}</b></div>`;
  if(S.fenjue)h+=`<div class="stat-row"><span>传承</span><b style="color:#ff9a3c">《焚诀》·融合${S.fenjue.fused}种异火</b></div>`;
+ if(S.fashen)h+=`<div class="stat-row"><span>法身</span><b>「${S.fashen.n}」${rankTag(S.fashen.t)}</b></div>`;
  if(S.ypRank)h+=`<div class="stat-row"><span>炼药师</span><b>${S.ypRank}品</b></div>`;
  h+=`<div class="stat-row"><span>天赋</span><b style="font-size:12px">${S.talentObjs.map(t=>t.n).join("、")}</b></div>`;
  document.getElementById('m-stats').innerHTML=h;
@@ -883,10 +926,10 @@ function showEvent(ev){
  const desc=typeof ev.d==="function"?ev.d(S):ev.d;
  showCard(ev.t,desc,ev.c);
 }
-const RANKT=["⚰️","🌱","🗡️","🛡️","👑","🔥","⛰️","🌩️","🐉","✨","☀️"];
-const RANKN=["泯然众人","初入斗气","一方好手","小有名气","斗王强者","斗皇老祖","斗宗传奇","斗尊大能","斗圣传说","半步斗帝","千古斗帝"];
+const RANKT=["⚰️","🌱","🗡️","🛡️","👑","🔥","⛰️","🌩️","🐉","✨","☀️","💫","🌍","🌌","♾️"];
+const RANKN=["泯然众人","初入斗气","一方好手","小有名气","斗王强者","斗皇老祖","斗宗传奇","斗尊大能","斗圣传说","半步斗帝","千古斗帝","至尊强者","地至尊","天至尊","大主宰"];
 function showEnding(){
- const i=Math.min(S.maxR,10);
+ const i=Math.min(S.maxR,14);
  document.getElementById('e-rank').textContent=RANKT[i]||"⚰️";
  document.getElementById('e-etitle').textContent=S.name+" · "+RANKN[i];
  document.getElementById('e-edesc').innerHTML=(S.cause||"离世")+"<br>享年 "+S.age+" 岁";
@@ -902,6 +945,7 @@ function showEnding(){
    <div class="stat-row"><span>武器</span><b>${S.weapon?"「"+S.weapon.n+"」"+RANKS[S.weapon.t]:"无"}</b></div>
    <div class="stat-row"><span>斗技</span><b>${S.douji?"「"+S.douji.n+"」"+RANKS[S.douji.t]:"无"}</b></div>
    <div class="stat-row"><span>传承</span><b>${S.fenjue?"《焚诀》·融合"+S.fenjue.fused+"种异火":"无"}</b></div>
+   <div class="stat-row"><span>法身</span><b>${S.fashen?"「"+S.fashen.n+"」"+RANKS[S.fashen.t]:"无"}</b></div>
    <div class="stat-row"><span>斩杀</span><b>${S.kills} 人</b></div>
    <div class="stat-row"><span>金钱</span><b>${S.money}</b></div>
    <div class="stat-row"><span>本世获得灵气</span><b style="color:#a9c8ff">+${lqGet}（余额 ${getLingqi()}）</b></div>
